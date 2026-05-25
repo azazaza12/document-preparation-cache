@@ -117,8 +117,7 @@ class MinioDoclingToMarkdownDocumentStorage(IDocumentStorage[MarkdownDocumentCon
     @override
     async def set(
         self, document: BaseDocument, content: MarkdownDocumentContent
-    ) -> None:
-        raise NotImplementedError
+    ) -> None: ...
 
     @override
     async def get(self, document: BaseDocument) -> MarkdownDocumentContent:
