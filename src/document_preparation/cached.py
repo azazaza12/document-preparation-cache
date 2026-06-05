@@ -153,3 +153,37 @@ class MinioMarkdownDocumentStorage(IDocumentStorage[MarkdownDocumentContent]):
     @override
     async def delete(self, document: BaseDocument) -> None:
         await self._client.delete(str(document.id))
+
+
+class CachedDoclingMarkdownStorage(IDocumentStorage[MarkdownDocumentContent]):
+    def __init__(
+        self,
+        document_storage_md: MinioMarkdownDocumentStorage,
+        docling_document_storage: MinioDoclingDocumentStorage,
+    ) -> None:
+        self._document_storage_md = document_storage_md
+        self._docling_document_storage = docling_document_storage
+
+    @override
+    async def set(
+        self, document: BaseDocument, content: MarkdownDocumentContent
+    ) -> None:
+        await self._document_storage_md.set(document, content)
+
+    @override
+    async def get(self, document: BaseDocument) -> MarkdownDocumentContent:
+        try:
+            return await self._document_storage_md.get(document)
+        except DocumentNotFoundError:
+            docling_doc = await self._docling_document_storage.get(document)
+            result = await docling_to_markdown.kiq(
+                document=docling_doc.content.model_dump()
+            )
+            markdown_task_result = await result.wait_result()
+            content = MarkdownDocumentContent(content=markdown_task_result.return_value)
+            await self._document_storage_md.set(document, content)
+            return content
+
+    @override
+    async def delete(self, document: BaseDocument) -> None:
+        await self._document_storage_md.delete(document)
