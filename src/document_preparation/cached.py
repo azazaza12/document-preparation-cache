@@ -110,29 +110,6 @@ class MinioDoclingDocumentStorage(IDocumentStorage[DoclingDocumentContent]):
         await self._client.delete(str(document.id))
 
 
-class MinioDoclingToMarkdownDocumentStorage(IDocumentStorage[MarkdownDocumentContent]):
-    def __init__(self, storage: MinioDoclingDocumentStorage) -> None:
-        self._storage = storage
-
-    @override
-    async def set(
-        self, document: BaseDocument, content: MarkdownDocumentContent
-    ) -> None: ...
-
-    @override
-    async def get(self, document: BaseDocument) -> MarkdownDocumentContent:
-        docling_content = await self._storage.get(document)
-        result = await docling_to_markdown.kiq(
-            document=docling_content.content.model_dump()
-        )
-        markdown = await result.wait_result()
-        return MarkdownDocumentContent(content=markdown.return_value)
-
-    @override
-    async def delete(self, document: BaseDocument) -> None:
-        await self._storage.delete(document)
-
-
 class MinioMarkdownDocumentStorage(IDocumentStorage[MarkdownDocumentContent]):
     def __init__(self, client: MinioStorageClient) -> None:
         self._client = client
