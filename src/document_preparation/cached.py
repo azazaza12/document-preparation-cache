@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import override
 
+import filetype
 from docling_core.types.doc.document import DoclingDocument
 from minio import Minio
 from minio.error import S3Error
@@ -11,7 +12,6 @@ from minio.error import S3Error
 from app.application import DocumentNotFoundError
 from app.config import StorageSettings
 from app.domain.entities import BaseDocument
-from app.domain.entities.imcp.document import ExcelIMCPDocument
 from app.domain.ports.documents import (
     BinaryDocumentContent,
     DoclingDocumentContent,
@@ -23,6 +23,15 @@ from app.domain.ports.docx_converter import IToDocxConverter
 from app.domain.ports.storage import IDocumentStorage
 from app.domain.ports.xlsx_converter import IToXlsxConverter
 from app.infrastructure.taskiq.tasks import docling_to_markdown
+
+
+# Расширения для спреадшит стратегии (конверт в XLSX)
+_SPREADSHEET_EXTENSIONS = frozenset({".xls", ".xlsx", ".ods"})
+
+
+def _guess_extension(data: bytes) -> str | None:
+    kind = filetype.guess(data)
+    return f".{kind.extension}" if kind else None
 
 
 class MinioStorageClient:
@@ -193,7 +202,7 @@ class PreparedTextStrategy(IPreparedStrategy):
 
     @override
     def supports(self, document: BaseDocument) -> bool:
-        return not isinstance(document, ExcelIMCPDocument)
+        return True
 
     @override
     def resolve_file_name(self, document: BaseDocument) -> str:
@@ -218,7 +227,7 @@ class PreparedSpreadsheetStrategy(IPreparedStrategy):
 
     @override
     def supports(self, document: BaseDocument) -> bool:
-        return isinstance(document, ExcelIMCPDocument)
+        return False
 
     @override
     def resolve_file_name(self, document: BaseDocument) -> str:
@@ -241,12 +250,26 @@ class PreparedStrategyMapper(IPreparedStrategy):
     def __init__(self, strategies: list[IPreparedStrategy]) -> None:
         self._strategies = strategies
 
-    def _pick(self, document: BaseDocument) -> IPreparedStrategy:
+    def pick_strategy(
+        self, document: BaseDocument, content: bytes | None = None
+    ) -> IPreparedStrategy:
+        if content is not None:
+            ext = _guess_extension(content)
+            if ext in _SPREADSHEET_EXTENSIONS:
+                for strategy in self._strategies:
+                    if isinstance(strategy, PreparedSpreadsheetStrategy):
+                        return strategy
+            for strategy in self._strategies:
+                if isinstance(strategy, PreparedTextStrategy):
+                    return strategy
         for strategy in self._strategies:
             if strategy.supports(document):
                 return strategy
         msg = f"No prepared strategy for {type(document).__name__}"
         raise ValueError(msg)
+
+    def _pick(self, document: BaseDocument) -> IPreparedStrategy:
+        return self.pick_strategy(document)
 
     @override
     def supports(self, document: BaseDocument) -> bool:
@@ -262,7 +285,7 @@ class PreparedStrategyMapper(IPreparedStrategy):
 
     @override
     async def convert(self, document: BaseDocument, data: bytes) -> bytes:
-        return await self._pick(document).convert(document, data)
+        return await self.pick_strategy(document, data).convert(document, data)
 
 
 class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
@@ -290,21 +313,24 @@ class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
         try:
             cached = await self._prepared_storage.get(document)
             content_bytes = cached.content
+            file_name = self._strategy.resolve_file_name(document)
         except DocumentNotFoundError:
             raw = await self._raw_storage.get(document)
-            if self._strategy.is_already_prepared(document):
+            if isinstance(self._strategy, PreparedStrategyMapper):
+                selected = self._strategy.pick_strategy(document, raw.content)
+            else:
+                selected = self._strategy
+            if selected.is_already_prepared(document):
                 content_bytes = raw.content
             else:
-                content_bytes = await self._strategy.convert(document, raw.content)
+                content_bytes = await selected.convert(document, raw.content)
             await self._prepared_storage.set(
                 document=document,
                 content=BinaryDocumentContent(content=content_bytes),
             )
+            file_name = selected.resolve_file_name(document)
         return PreparedDocumentContent(
-            content=PreparedContent(
-                content=content_bytes,
-                file_name=self._strategy.resolve_file_name(document),
-            )
+            content=PreparedContent(content=content_bytes, file_name=file_name)
         )
 
     @override
