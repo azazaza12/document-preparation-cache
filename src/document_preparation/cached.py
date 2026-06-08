@@ -1,6 +1,8 @@
 import asyncio
 import io
+from abc import ABC, abstractmethod
 from typing import override
+from pathlib import Path
 
 from docling_core.types.doc.document import DoclingDocument
 from minio import Minio
@@ -9,13 +11,18 @@ from minio.error import S3Error
 from app.application import DocumentNotFoundError
 from app.config import StorageSettings
 from app.domain.entities import BaseDocument
+from app.domain.ports.docx_converter import IToDocxConverter
 from app.domain.ports.documents import (
     BinaryDocumentContent,
     DoclingDocumentContent,
     MarkdownDocumentContent,
+    PreparedDocumentContent,
+    PreparedContent,
 )
 from app.domain.ports.storage import IDocumentStorage
+from app.domain.ports.xlsx_converter import IToXlsxConverter
 from app.infrastructure.taskiq.tasks import docling_to_markdown
+
 
 
 class MinioStorageClient:
@@ -164,3 +171,102 @@ class CachedDoclingMarkdownStorage(IDocumentStorage[MarkdownDocumentContent]):
     @override
     async def delete(self, document: BaseDocument) -> None:
         await self._document_storage_md.delete(document)
+
+
+
+class IPreparedStrategy(ABC):
+    @abstractmethod
+    def resolve_file_name(self, raw_file_name: str) -> str: ...
+
+    @abstractmethod
+    def is_already_prepared(self, raw_file_name: str) -> bool: ...
+
+    @abstractmethod
+    async def convert(self, raw_file_name: str, data: bytes) -> bytes: ...
+
+
+class PreparedTextStrategy(IPreparedStrategy):
+    def __init__(self, to_docx_converter: IToDocxConverter) -> None:
+        self._to_docx_converter = to_docx_converter
+
+    @override
+    def resolve_file_name(self, raw_file_name: str) -> str:
+        suffix = Path(raw_file_name).suffix.lower()
+        if suffix in {".pdf", ".docx"}:
+            return raw_file_name
+        return str(Path(raw_file_name).with_suffix(".docx"))
+
+    @override
+    def is_already_prepared(self, raw_file_name: str) -> bool:
+        return Path(raw_file_name).suffix.lower() in {".pdf", ".docx"}
+
+    @override
+    async def convert(self, raw_file_name: str, data: bytes) -> bytes:
+        return await self._to_docx_converter.convert(raw_file_name, data)
+
+
+class PreparedSpreadsheetStrategy(IPreparedStrategy):
+    def __init__(self, to_xlsx_converter: IToXlsxConverter) -> None:
+        self._to_xlsx_converter = to_xlsx_converter
+
+    @override
+    def resolve_file_name(self, raw_file_name: str) -> str:
+        suffix = Path(raw_file_name).suffix.lower()
+        if suffix == ".xlsx":
+            return raw_file_name
+        return str(Path(raw_file_name).with_suffix(".xlsx"))
+
+    @override
+    def is_already_prepared(self, raw_file_name: str) -> bool:
+        return Path(raw_file_name).suffix.lower() == ".xlsx"
+
+    @override
+    async def convert(self, raw_file_name: str, data: bytes) -> bytes:
+        return await self._to_xlsx_converter.convert(raw_file_name, data)
+
+
+class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
+    def __init__(
+        self,
+        prepared_storage: IDocumentStorage[BinaryDocumentContent],
+        raw_storage: IDocumentStorage[BinaryDocumentContent],
+        strategy: IPreparedStrategy,
+    ) -> None:
+        self._prepared_storage = prepared_storage
+        self._raw_storage = raw_storage
+        self._strategy = strategy
+
+    @override
+    async def set(
+        self, document: BaseDocument, content: PreparedDocumentContent
+    ) -> None:
+        await self._prepared_storage.set(
+            document=document,
+            content=BinaryDocumentContent(content=content.content.content),
+        )
+
+    @override
+    async def get(self, document: BaseDocument) -> PreparedDocumentContent:
+        try:
+            cached = await self._prepared_storage.get(document)
+            content_bytes = cached.content
+        except DocumentNotFoundError:
+            raw = await self._raw_storage.get(document)
+            if self._strategy.is_already_prepared(document.file_name):
+                content_bytes = raw.content
+            else:
+                content_bytes = await self._strategy.convert(document.file_name, raw.content)
+            await self._prepared_storage.set(
+                document=document,
+                content=BinaryDocumentContent(content=content_bytes),
+            )
+        return PreparedDocumentContent(
+            content=PreparedContent(
+                content=content_bytes,
+                file_name=self._strategy.resolve_file_name(document.file_name),
+            )
+        )
+
+    @override
+    async def delete(self, document: BaseDocument) -> None:
+        await self._prepared_storage.delete(document)
