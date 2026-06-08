@@ -19,3 +19,12 @@ class DoclingDocumentContent(BaseDocumentContent[DoclingDocument]):
 
 class MarkdownDocumentContent(BaseDocumentContent[str]):
     pass
+
+
+@dataclass
+class PreparedContent:
+    content: bytes
+    file_name: str
+
+class PreparedDocumentContent(BaseDocumentContent[PreparedContent]):
+    pass
