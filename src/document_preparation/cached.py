@@ -11,6 +11,7 @@ from minio.error import S3Error
 from app.application import DocumentNotFoundError
 from app.config import StorageSettings
 from app.domain.entities import BaseDocument
+from app.domain.entities.imcp.document import ExcelIMCPDocument
 from app.domain.ports.docx_converter import IToDocxConverter
 from app.domain.ports.documents import (
     BinaryDocumentContent,
@@ -176,13 +177,16 @@ class CachedDoclingMarkdownStorage(IDocumentStorage[MarkdownDocumentContent]):
 
 class IPreparedStrategy(ABC):
     @abstractmethod
-    def resolve_file_name(self, raw_file_name: str) -> str: ...
+    def supports(self, document: BaseDocument) -> bool: ...
 
     @abstractmethod
-    def is_already_prepared(self, raw_file_name: str) -> bool: ...
+    def resolve_file_name(self, document: BaseDocument) -> str: ...
 
     @abstractmethod
-    async def convert(self, raw_file_name: str, data: bytes) -> bytes: ...
+    def is_already_prepared(self, document: BaseDocument) -> bool: ...
+
+    @abstractmethod
+    async def convert(self, document: BaseDocument, data: bytes) -> bytes: ...
 
 
 class PreparedTextStrategy(IPreparedStrategy):
@@ -190,19 +194,24 @@ class PreparedTextStrategy(IPreparedStrategy):
         self._to_docx_converter = to_docx_converter
 
     @override
-    def resolve_file_name(self, raw_file_name: str) -> str:
+    def supports(self, document: BaseDocument) -> bool:
+        return not isinstance(document, ExcelIMCPDocument)
+
+    @override
+    def resolve_file_name(self, document: BaseDocument) -> str:
+        raw_file_name = document.file_name
         suffix = Path(raw_file_name).suffix.lower()
         if suffix in {".pdf", ".docx"}:
             return raw_file_name
         return str(Path(raw_file_name).with_suffix(".docx"))
 
     @override
-    def is_already_prepared(self, raw_file_name: str) -> bool:
-        return Path(raw_file_name).suffix.lower() in {".pdf", ".docx"}
+    def is_already_prepared(self, document: BaseDocument) -> bool:
+        return Path(document.file_name).suffix.lower() in {".pdf", ".docx"}
 
     @override
-    async def convert(self, raw_file_name: str, data: bytes) -> bytes:
-        return await self._to_docx_converter.convert(raw_file_name, data)
+    async def convert(self, document: BaseDocument, data: bytes) -> bytes:
+        return await self._to_docx_converter.convert(document.file_name, data)
 
 
 class PreparedSpreadsheetStrategy(IPreparedStrategy):
@@ -210,19 +219,52 @@ class PreparedSpreadsheetStrategy(IPreparedStrategy):
         self._to_xlsx_converter = to_xlsx_converter
 
     @override
-    def resolve_file_name(self, raw_file_name: str) -> str:
+    def supports(self, document: BaseDocument) -> bool:
+        return isinstance(document, ExcelIMCPDocument)
+
+    @override
+    def resolve_file_name(self, document: BaseDocument) -> str:
+        raw_file_name = document.file_name
         suffix = Path(raw_file_name).suffix.lower()
         if suffix == ".xlsx":
             return raw_file_name
         return str(Path(raw_file_name).with_suffix(".xlsx"))
 
     @override
-    def is_already_prepared(self, raw_file_name: str) -> bool:
-        return Path(raw_file_name).suffix.lower() == ".xlsx"
+    def is_already_prepared(self, document: BaseDocument) -> bool:
+        return Path(document.file_name).suffix.lower() == ".xlsx"
 
     @override
-    async def convert(self, raw_file_name: str, data: bytes) -> bytes:
-        return await self._to_xlsx_converter.convert(raw_file_name, data)
+    async def convert(self, document: BaseDocument, data: bytes) -> bytes:
+        return await self._to_xlsx_converter.convert(document.file_name, data)
+
+
+class PreparedStrategyMapper(IPreparedStrategy):
+    def __init__(self, strategies: list[IPreparedStrategy]) -> None:
+        self._strategies = strategies
+
+    def _pick(self, document: BaseDocument) -> IPreparedStrategy:
+        for strategy in self._strategies:
+            if strategy.supports(document):
+                return strategy
+        msg = f"No prepared strategy for {type(document).__name__}"
+        raise ValueError(msg)
+
+    @override
+    def supports(self, document: BaseDocument) -> bool:
+        return any(strategy.supports(document) for strategy in self._strategies)
+
+    @override
+    def resolve_file_name(self, document: BaseDocument) -> str:
+        return self._pick(document).resolve_file_name(document)
+
+    @override
+    def is_already_prepared(self, document: BaseDocument) -> bool:
+        return self._pick(document).is_already_prepared(document)
+
+    @override
+    async def convert(self, document: BaseDocument, data: bytes) -> bytes:
+        return await self._pick(document).convert(document, data)
 
 
 class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
@@ -252,10 +294,10 @@ class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
             content_bytes = cached.content
         except DocumentNotFoundError:
             raw = await self._raw_storage.get(document)
-            if self._strategy.is_already_prepared(document.file_name):
+            if self._strategy.is_already_prepared(document):
                 content_bytes = raw.content
             else:
-                content_bytes = await self._strategy.convert(document.file_name, raw.content)
+                content_bytes = await self._strategy.convert(document, raw.content)
             await self._prepared_storage.set(
                 document=document,
                 content=BinaryDocumentContent(content=content_bytes),
@@ -263,7 +305,7 @@ class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
         return PreparedDocumentContent(
             content=PreparedContent(
                 content=content_bytes,
-                file_name=self._strategy.resolve_file_name(document.file_name),
+                file_name=self._strategy.resolve_file_name(document),
             )
         )
 
