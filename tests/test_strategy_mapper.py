@@ -28,7 +28,9 @@ def mapper_with_converters() -> tuple[PreparedStrategyMapper, AsyncMock, AsyncMo
 
 
 @pytest.fixture
-def mapper(mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock]) -> PreparedStrategyMapper:
+def mapper(
+    mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock],
+) -> PreparedStrategyMapper:
     return mapper_with_converters[0]
 
 
@@ -82,9 +84,5 @@ def test_mapper_raises_when_no_strategy_supports_document() -> None:
     mapper = PreparedStrategyMapper([unsupported_strategy])
     document = SingleSupplierDocument(id=uuid4(), file_name="contract.doc")
 
-    try:
+    with pytest.raises(ValueError, match="No prepared strategy"):
         mapper.resolve_file_name(document)
-    except ValueError as exc:
-        assert "No prepared strategy" in str(exc)
-    else:
-        pytest.fail("Expected ValueError")

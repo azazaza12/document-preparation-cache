@@ -26,5 +26,6 @@ class PreparedContent:
     content: bytes
     file_name: str
 
+
 class PreparedDocumentContent(BaseDocumentContent[PreparedContent]):
     pass

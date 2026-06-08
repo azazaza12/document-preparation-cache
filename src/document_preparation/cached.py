@@ -1,8 +1,8 @@
 import asyncio
 import io
 from abc import ABC, abstractmethod
-from typing import override
 from pathlib import Path
+from typing import override
 
 from docling_core.types.doc.document import DoclingDocument
 from minio import Minio
@@ -12,18 +12,17 @@ from app.application import DocumentNotFoundError
 from app.config import StorageSettings
 from app.domain.entities import BaseDocument
 from app.domain.entities.imcp.document import ExcelIMCPDocument
-from app.domain.ports.docx_converter import IToDocxConverter
 from app.domain.ports.documents import (
     BinaryDocumentContent,
     DoclingDocumentContent,
     MarkdownDocumentContent,
-    PreparedDocumentContent,
     PreparedContent,
+    PreparedDocumentContent,
 )
+from app.domain.ports.docx_converter import IToDocxConverter
 from app.domain.ports.storage import IDocumentStorage
 from app.domain.ports.xlsx_converter import IToXlsxConverter
 from app.infrastructure.taskiq.tasks import docling_to_markdown
-
 
 
 class MinioStorageClient:
@@ -172,7 +171,6 @@ class CachedDoclingMarkdownStorage(IDocumentStorage[MarkdownDocumentContent]):
     @override
     async def delete(self, document: BaseDocument) -> None:
         await self._document_storage_md.delete(document)
-
 
 
 class IPreparedStrategy(ABC):

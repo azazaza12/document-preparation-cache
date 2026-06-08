@@ -47,9 +47,7 @@ async def test_prepared_text_cache_miss_converts_doc_and_caches() -> None:
     prepared_storage.set = AsyncMock()
 
     raw_storage = MagicMock()
-    raw_storage.get = AsyncMock(
-        return_value=BinaryDocumentContent(content=b"raw-doc")
-    )
+    raw_storage.get = AsyncMock(return_value=BinaryDocumentContent(content=b"raw-doc"))
 
     converter = AsyncMock()
     converter.convert.return_value = b"converted-docx"
@@ -105,9 +103,7 @@ async def test_prepared_spreadsheet_cache_miss_converts_xls_and_caches() -> None
     prepared_storage.set = AsyncMock()
 
     raw_storage = MagicMock()
-    raw_storage.get = AsyncMock(
-        return_value=BinaryDocumentContent(content=b"raw-xls")
-    )
+    raw_storage.get = AsyncMock(return_value=BinaryDocumentContent(content=b"raw-xls"))
 
     converter = AsyncMock()
     converter.convert.return_value = b"converted-xlsx"
