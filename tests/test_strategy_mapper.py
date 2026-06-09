@@ -64,22 +64,21 @@ def test_mapper_routes_text_content_to_text_strategy(
     assert isinstance(selected, PreparedTextStrategy)
 
 
-def test_mapper_routes_unknown_content_to_text_strategy(
+def test_mapper_raises_for_unsupported_content(
     mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("filetype.guess", _fake_guess(None))
 
-    selected = mapper.pick(b"who-knows")
+    with pytest.raises(ValueError, match="No prepared strategy"):
+        mapper.pick(b"who-knows")
 
-    assert isinstance(selected, PreparedTextStrategy)
 
-
-def test_mapper_supports_any_content(
+def test_mapper_does_not_support_unrecognized_content(
     mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("filetype.guess", _fake_guess(None))
 
-    assert mapper.supports(b"who-knows") is True
+    assert mapper.supports(b"who-knows") is False
 
 
 def test_mapper_resolve_file_name_for_text_content(

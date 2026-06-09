@@ -24,8 +24,9 @@ from app.domain.ports.xlsx_converter import IToXlsxConverter
 from app.infrastructure.taskiq.tasks import docling_to_markdown
 
 
-_SPREADSHEET_EXTENSIONS = frozenset({".xls", ".xlsx", ".ods"})
+_SPREADSHEET_EXTENSIONS = frozenset({".xls", ".xlsx", ".xlsm", ".ods"})
 _TEXT_READY_EXTENSIONS = frozenset({".pdf", ".docx"})
+_TEXT_SOURCE_EXTENSIONS = frozenset({".pdf", ".docx", ".docm", ".doc", ".odt", ".rtf"})
 
 
 def _guess_extension(data: bytes) -> str | None:
@@ -200,7 +201,7 @@ class PreparedTextStrategy(IPreparedStrategy):
 
     @override
     def supports(self, content: bytes) -> bool:
-        return _guess_extension(content) not in _SPREADSHEET_EXTENSIONS
+        return _guess_extension(content) in _TEXT_SOURCE_EXTENSIONS
 
     @override
     def resolve_file_name(self, document: BaseDocument, content: bytes) -> str:
