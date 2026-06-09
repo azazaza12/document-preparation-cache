@@ -24,8 +24,10 @@ from app.domain.ports.xlsx_converter import IToXlsxConverter
 from app.infrastructure.taskiq.tasks import docling_to_markdown
 
 
-# Расширения для спреадшит стратегии (конверт в XLSX)
+# Расширения, маршрутизируемые в спредшит-стратегию (конверт в XLSX)
 _SPREADSHEET_EXTENSIONS = frozenset({".xls", ".xlsx", ".ods"})
+# Расширения, которые текстовая стратегия принимает без конвертации
+_TEXT_READY_EXTENSIONS = frozenset({".pdf", ".docx"})
 
 
 def _guess_extension(data: bytes) -> str | None:
@@ -207,13 +209,13 @@ class PreparedTextStrategy(IPreparedStrategy):
     def resolve_file_name(self, document: BaseDocument, content: bytes) -> str:
         raw_file_name = document.file_name
         suffix = Path(raw_file_name).suffix.lower()
-        if suffix in {".pdf", ".docx"}:
+        if suffix in _TEXT_READY_EXTENSIONS:
             return raw_file_name
         return str(Path(raw_file_name).with_suffix(".docx"))
 
     @override
     def is_already_prepared(self, content: bytes) -> bool:
-        return _guess_extension(content) in {".pdf", ".docx"}
+        return _guess_extension(content) in _TEXT_READY_EXTENSIONS
 
     @override
     async def convert(self, document: BaseDocument, data: bytes) -> bytes:
