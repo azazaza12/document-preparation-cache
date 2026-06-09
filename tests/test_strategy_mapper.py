@@ -1,15 +1,26 @@
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
-from app.domain.entities.single_supplier import SingleSupplierDocument
 from app.domain.entities.unknown import UnknownDocument
 from app.infrastructure.storages.minio_storage import (
     PreparedSpreadsheetStrategy,
     PreparedStrategyMapper,
     PreparedTextStrategy,
 )
+
+
+def _fake_guess(extension: str | None):
+    """Подмена filetype.guess значением FakeKind(extension) либо None."""
+    if extension is None:
+        return lambda _data: None
+
+    class FakeKind:
+        pass
+
+    FakeKind.extension = extension
+    return lambda _data: FakeKind()
 
 
 @pytest.fixture
@@ -34,62 +45,101 @@ def mapper(
     return mapper_with_converters[0]
 
 
-def test_mapper_supports_text_document(
-    mapper: PreparedStrategyMapper,
+# --- Routing by content via filetype ---
+
+
+def test_mapper_routes_spreadsheet_content_to_spreadsheet_strategy(
+    mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    text_document = SingleSupplierDocument(id=uuid4(), file_name="contract.doc")
+    monkeypatch.setattr("filetype.guess", _fake_guess("xlsx"))
 
-    assert mapper.supports(text_document) is True
+    selected = mapper.pick(b"fake-xlsx")
+
+    assert isinstance(selected, PreparedSpreadsheetStrategy)
 
 
-def test_mapper_routes_text_document_to_text_strategy(
-    mapper: PreparedStrategyMapper,
+def test_mapper_routes_text_content_to_text_strategy(
+    mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    document = SingleSupplierDocument(id=uuid4(), file_name="contract.doc")
+    monkeypatch.setattr("filetype.guess", _fake_guess("docx"))
 
-    assert mapper.resolve_file_name(document) == "contract.docx"
-    assert mapper.is_already_prepared(document) is False
+    selected = mapper.pick(b"fake-docx")
+
+    assert isinstance(selected, PreparedTextStrategy)
+
+
+def test_mapper_routes_unknown_content_to_text_strategy(
+    mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("filetype.guess", _fake_guess(None))
+
+    selected = mapper.pick(b"who-knows")
+
+    assert isinstance(selected, PreparedTextStrategy)
+
+
+def test_mapper_supports_any_content(
+    mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("filetype.guess", _fake_guess(None))
+
+    assert mapper.supports(b"who-knows") is True
+
+
+# --- Delegation through pick ---
+
+
+def test_mapper_resolve_file_name_for_text_content(
+    mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("filetype.guess", _fake_guess("docx"))
+    document = UnknownDocument(id=uuid4(), file_name="contract.doc")
+
+    assert mapper.resolve_file_name(document, b"fake-docx") == "contract.docx"
+
+
+def test_mapper_resolve_file_name_for_spreadsheet_content(
+    mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("filetype.guess", _fake_guess("xlsx"))
+    document = UnknownDocument(id=uuid4(), file_name="report.xls")
+
+    assert mapper.resolve_file_name(document, b"fake-xlsx") == "report.xlsx"
+
+
+def test_mapper_is_already_prepared_by_content(
+    mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("filetype.guess", _fake_guess("docx"))
+    assert mapper.is_already_prepared(b"already-docx") is True
+
+    monkeypatch.setattr("filetype.guess", _fake_guess("doc"))
+    assert mapper.is_already_prepared(b"legacy-doc") is False
 
 
 @pytest.mark.asyncio
 async def test_mapper_delegates_convert_to_text_strategy(
     mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mapper, text_converter, _ = mapper_with_converters
+    monkeypatch.setattr("filetype.guess", _fake_guess("doc"))
+    document = UnknownDocument(id=uuid4(), file_name="contract.doc")
 
-    text_document = SingleSupplierDocument(id=uuid4(), file_name="contract.doc")
-
-    assert await mapper.convert(text_document, b"raw-doc") == b"docx"
+    assert await mapper.convert(document, b"raw-doc") == b"docx"
 
     text_converter.convert.assert_awaited_once_with("contract.doc", b"raw-doc")
 
 
-# --- Extension based routing via filetype for any document ---
-
-
-def test_mapper_routes_unknown_xlsx_to_spreadsheet_strategy(
-    mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.asyncio
+async def test_mapper_delegates_convert_to_spreadsheet_strategy(
+    mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    doc = UnknownDocument(id=uuid4(), file_name="report.xls")
+    mapper, _, spreadsheet_converter = mapper_with_converters
+    monkeypatch.setattr("filetype.guess", _fake_guess("xls"))
+    document = UnknownDocument(id=uuid4(), file_name="report.xls")
 
-    class FakeKind:
-        extension = "xlsx"
+    assert await mapper.convert(document, b"raw-xls") == b"xlsx"
 
-    monkeypatch.setattr("filetype.guess", lambda data: FakeKind())
-
-    selected = mapper.pick_strategy(doc, b"fake-xlsx")
-    assert isinstance(selected, PreparedSpreadsheetStrategy)
-
-
-def test_mapper_routes_unknown_docx_to_text_strategy(
-    mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    doc = UnknownDocument(id=uuid4(), file_name="contract.doc")
-
-    class FakeKind:
-        extension = "docx"
-
-    monkeypatch.setattr("filetype.guess", lambda data: FakeKind())
-
-    selected = mapper.pick_strategy(doc, b"fake-docx")
-    assert isinstance(selected, PreparedTextStrategy)
+    spreadsheet_converter.convert.assert_awaited_once_with("report.xls", b"raw-xls")
