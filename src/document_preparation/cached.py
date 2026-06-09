@@ -24,9 +24,7 @@ from app.domain.ports.xlsx_converter import IToXlsxConverter
 from app.infrastructure.taskiq.tasks import docling_to_markdown
 
 
-# Расширения, маршрутизируемые в спредшит-стратегию (конверт в XLSX)
 _SPREADSHEET_EXTENSIONS = frozenset({".xls", ".xlsx", ".ods"})
-# Расширения, которые текстовая стратегия принимает без конвертации
 _TEXT_READY_EXTENSIONS = frozenset({".pdf", ".docx"})
 
 

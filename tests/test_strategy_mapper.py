@@ -12,7 +12,6 @@ from app.infrastructure.storages.minio_storage import (
 
 
 def _fake_guess(extension: str | None):
-    """Подмена filetype.guess значением FakeKind(extension) либо None."""
     if extension is None:
         return lambda _data: None
 
@@ -43,9 +42,6 @@ def mapper(
     mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock],
 ) -> PreparedStrategyMapper:
     return mapper_with_converters[0]
-
-
-# --- Routing by content via filetype ---
 
 
 def test_mapper_routes_spreadsheet_content_to_spreadsheet_strategy(
@@ -84,9 +80,6 @@ def test_mapper_supports_any_content(
     monkeypatch.setattr("filetype.guess", _fake_guess(None))
 
     assert mapper.supports(b"who-knows") is True
-
-
-# --- Delegation through pick ---
 
 
 def test_mapper_resolve_file_name_for_text_content(

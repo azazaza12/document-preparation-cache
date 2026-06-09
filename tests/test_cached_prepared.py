@@ -16,7 +16,6 @@ from app.infrastructure.storages.minio_storage import (
 
 
 def _patch_guess(monkeypatch: pytest.MonkeyPatch, extension: str | None) -> None:
-    """Подмена filetype.guess значением FakeKind(extension) либо None."""
     if extension is None:
         monkeypatch.setattr("filetype.guess", lambda _data: None)
         return
@@ -178,9 +177,6 @@ async def test_prepared_spreadsheet_cache_miss_xlsx_skips_converter(
     assert prepared_storage.set.await_args.kwargs["content"].content == b"xlsx-bytes"
 
 
-# --- Storage driven by the mapper: routing happens by content, not by name ---
-
-
 def _mapper() -> tuple[PreparedStrategyMapper, AsyncMock, AsyncMock]:
     text_converter = AsyncMock()
     text_converter.convert.return_value = b"converted-docx"
@@ -247,8 +243,6 @@ async def test_mapper_cache_miss_routes_odt_content_to_text(
 async def test_mapper_cache_hit_resolves_file_name_from_cached_content(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # На cache-hit имя выхода берётся по содержимому закэшированных байтов,
-    # поэтому xlsx из кэша не получает текстовое имя .docx.
     _patch_guess(monkeypatch, "xlsx")
     prepared_storage = MagicMock()
     prepared_storage.get = AsyncMock(
