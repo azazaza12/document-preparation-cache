@@ -47,8 +47,8 @@ async def test_prepared_text_cache_hit_returns_resolved_file_name() -> None:
 
     loaded = await storage.get(document)
 
-    assert loaded.content.content == b"cached-docx"
-    assert loaded.content.file_name == "contract.docx"
+    assert loaded.content == b"cached-docx"
+    assert loaded.file_name == "contract.docx"
     prepared_storage.get.assert_awaited_once_with(document)
     raw_storage.get.assert_not_awaited()
     converter.convert.assert_not_awaited()
@@ -76,8 +76,8 @@ async def test_prepared_text_cache_miss_converts_doc_and_caches(
 
     loaded = await storage.get(document)
 
-    assert loaded.content.content == b"converted-docx"
-    assert loaded.content.file_name == "contract.docx"
+    assert loaded.content == b"converted-docx"
+    assert loaded.file_name == "contract.docx"
     raw_storage.get.assert_awaited_once_with(document)
     converter.convert.assert_awaited_once_with("contract.doc", b"raw-doc")
     prepared_storage.set.assert_awaited_once()
@@ -109,8 +109,8 @@ async def test_prepared_text_cache_miss_docx_skips_converter(
 
     loaded = await storage.get(document)
 
-    assert loaded.content.content == b"docx-bytes"
-    assert loaded.content.file_name == "contract.docx"
+    assert loaded.content == b"docx-bytes"
+    assert loaded.file_name == "contract.docx"
     converter.convert.assert_not_awaited()
     prepared_storage.set.assert_awaited_once()
 
@@ -138,8 +138,8 @@ async def test_prepared_spreadsheet_cache_miss_converts_xls_and_caches(
 
     loaded = await storage.get(document)
 
-    assert loaded.content.content == b"converted-xlsx"
-    assert loaded.content.file_name == "imcp.xlsx"
+    assert loaded.content == b"converted-xlsx"
+    assert loaded.file_name == "imcp.xlsx"
     converter.convert.assert_awaited_once_with("imcp.xls", b"raw-xls")
     prepared_storage.set.assert_awaited_once()
 
@@ -170,8 +170,8 @@ async def test_prepared_spreadsheet_cache_miss_xlsx_skips_converter(
 
     loaded = await storage.get(document)
 
-    assert loaded.content.content == b"xlsx-bytes"
-    assert loaded.content.file_name == "imcp.xlsx"
+    assert loaded.content == b"xlsx-bytes"
+    assert loaded.file_name == "imcp.xlsx"
     converter.convert.assert_not_awaited()
     prepared_storage.set.assert_awaited_once()
 
@@ -213,8 +213,8 @@ async def test_mapper_cache_miss_routes_xlsx_content_to_spreadsheet(
 
     loaded = await storage.get(document)
 
-    assert loaded.content.content == b"converted-xlsx"
-    assert loaded.content.file_name == "report.xlsx"
+    assert loaded.content == b"converted-xlsx"
+    assert loaded.file_name == "report.xlsx"
     spreadsheet_converter.convert.assert_awaited_once_with("report.xls", b"raw-xls")
     text_converter.convert.assert_not_awaited()
 
@@ -237,8 +237,8 @@ async def test_mapper_cache_miss_routes_odt_content_to_text(
 
     loaded = await storage.get(document)
 
-    assert loaded.content.content == b"converted-docx"
-    assert loaded.content.file_name == "contract.docx"
+    assert loaded.content == b"converted-docx"
+    assert loaded.file_name == "contract.docx"
     text_converter.convert.assert_awaited_once_with("contract.odt", b"raw-odt")
     spreadsheet_converter.convert.assert_not_awaited()
 
@@ -265,8 +265,8 @@ async def test_mapper_cache_hit_resolves_file_name_from_cached_content(
 
     loaded = await storage.get(document)
 
-    assert loaded.content.content == b"cached-xlsx"
-    assert loaded.content.file_name == "report.xlsx"
+    assert loaded.content == b"cached-xlsx"
+    assert loaded.file_name == "report.xlsx"
     raw_storage.get.assert_not_awaited()
     text_converter.convert.assert_not_awaited()
     spreadsheet_converter.convert.assert_not_awaited()

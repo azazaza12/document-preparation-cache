@@ -16,7 +16,6 @@ from app.domain.ports.documents import (
     BinaryDocumentContent,
     DoclingDocumentContent,
     MarkdownDocumentContent,
-    PreparedContent,
     PreparedDocumentContent,
 )
 from app.domain.ports.docx_converter import IToDocxConverter
@@ -291,7 +290,7 @@ class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
     ) -> None:
         await self._prepared_storage.set(
             document=document,
-            content=BinaryDocumentContent(content=content.content.content),
+            content=BinaryDocumentContent(content=content.content),
         )
 
     @override
@@ -310,10 +309,8 @@ class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
                 content=BinaryDocumentContent(content=content_bytes),
             )
         return PreparedDocumentContent(
-            content=PreparedContent(
-                content=content_bytes,
-                file_name=self._strategy.resolve_file_name(document, content_bytes),
-            )
+            content=content_bytes,
+            file_name=self._strategy.resolve_file_name(document, content_bytes),
         )
 
     @override
