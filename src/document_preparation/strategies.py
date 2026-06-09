@@ -2,9 +2,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, override
 
 from app.domain.ports.documents import PreparedDocumentContent
-from app.domain.ports.docx_converter import IToDocxConverter
+from app.domain.ports.format_converter import IFormatConverter
 from app.domain.ports.prepared_strategy import IPreparedStrategy
-from app.domain.ports.xlsx_converter import IToXlsxConverter
 
 
 if TYPE_CHECKING:
@@ -17,8 +16,8 @@ _PREPARED_EXTENSIONS = frozenset({".pdf", ".docx", ".xlsx"})
 
 
 class PreparedTextStrategy(IPreparedStrategy):
-    def __init__(self, to_docx_converter: IToDocxConverter) -> None:
-        self._to_docx_converter = to_docx_converter
+    def __init__(self, converter: IFormatConverter) -> None:
+        self._converter = converter
 
     @override
     def supports(self, extension: str | None) -> bool:
@@ -39,7 +38,7 @@ class PreparedTextStrategy(IPreparedStrategy):
         if extension in _PREPARED_EXTENSIONS:
             content = raw
         else:
-            content = await self._to_docx_converter.convert(document.file_name, raw)
+            content = await self._converter.convert(document.file_name, raw)
         return PreparedDocumentContent(
             content=content,
             file_name=self.resolve_file_name(document, extension),
@@ -47,8 +46,8 @@ class PreparedTextStrategy(IPreparedStrategy):
 
 
 class PreparedSpreadsheetStrategy(IPreparedStrategy):
-    def __init__(self, to_xlsx_converter: IToXlsxConverter) -> None:
-        self._to_xlsx_converter = to_xlsx_converter
+    def __init__(self, converter: IFormatConverter) -> None:
+        self._converter = converter
 
     @override
     def supports(self, extension: str | None) -> bool:
@@ -69,7 +68,7 @@ class PreparedSpreadsheetStrategy(IPreparedStrategy):
         if extension in _PREPARED_EXTENSIONS:
             content = raw
         else:
-            content = await self._to_xlsx_converter.convert(document.file_name, raw)
+            content = await self._converter.convert(document.file_name, raw)
         return PreparedDocumentContent(
             content=content,
             file_name=self.resolve_file_name(document, extension),
