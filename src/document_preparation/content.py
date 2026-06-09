@@ -22,5 +22,6 @@ class MarkdownDocumentContent(BaseDocumentContent[str]):
     pass
 
 
+@dataclass(kw_only=True)
 class PreparedDocumentContent(BaseDocumentContent[bytes]):
-    pass
+    file_name: str
