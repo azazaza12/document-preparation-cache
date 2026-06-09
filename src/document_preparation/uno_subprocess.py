@@ -1,15 +1,15 @@
 import subprocess
 from pathlib import Path
-from typing import Literal
 
 from app.config import UnoConverterSettings
+from app.infrastructure.extraction.conversion_target import ConversionTarget
 from app.infrastructure.extraction.exceptions import DocumentConversionError
 
 
 def unoconvert(
     settings: UnoConverterSettings,
     data: bytes,
-    target: Literal["docx", "xlsx"],
+    target: ConversionTarget,
     *,
     file_name: str | None = None,
 ) -> bytes:
@@ -26,7 +26,7 @@ def unoconvert(
         "--protocol",
         "http",
         "--convert-to",
-        target,
+        target.value,
         "-",
         "-",  # infile = stdin, outfile = stdout
     ]

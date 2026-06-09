@@ -1,14 +1,14 @@
 import asyncio
-from typing import Literal
 
 from app.config import UnoConverterSettings
 from app.domain.ports.format_converter import IFormatConverter
+from app.infrastructure.extraction.conversion_target import ConversionTarget
 from app.infrastructure.extraction.uno_convert import unoconvert
 
 
 class UnoConverter(IFormatConverter):
     def __init__(
-        self, settings: UnoConverterSettings, target: Literal["docx", "xlsx"]
+        self, settings: UnoConverterSettings, target: ConversionTarget
     ) -> None:
         self._settings = settings
         self._target = target
