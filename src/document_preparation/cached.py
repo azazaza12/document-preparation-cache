@@ -1,7 +1,5 @@
 import asyncio
 import io
-from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import override
 
 import filetype
@@ -18,15 +16,9 @@ from app.domain.ports.documents import (
     MarkdownDocumentContent,
     PreparedDocumentContent,
 )
-from app.domain.ports.docx_converter import IToDocxConverter
+from app.domain.ports.prepared_strategy import IPreparedStrategy
 from app.domain.ports.storage import IDocumentStorage
-from app.domain.ports.xlsx_converter import IToXlsxConverter
 from app.infrastructure.taskiq.tasks import docling_to_markdown
-
-
-_TEXT_SOURCE_EXTENSIONS = frozenset({".pdf", ".doc", ".docx", ".odt", ".rtf"})
-_SPREADSHEET_SOURCE_EXTENSIONS = frozenset({".xls", ".xlsx", ".ods"})
-_PREPARED_EXTENSIONS = frozenset({".pdf", ".docx", ".xlsx"})
 
 
 def _guess_extension(data: bytes) -> str | None:
@@ -182,105 +174,6 @@ class CachedDoclingMarkdownStorage(IDocumentStorage[MarkdownDocumentContent]):
         await self._document_storage_md.delete(document)
 
 
-class IPreparedStrategy(ABC):
-    @abstractmethod
-    def supports(self, content: bytes) -> bool: ...
-
-    @abstractmethod
-    def resolve_file_name(self, document: BaseDocument, content: bytes) -> str: ...
-
-    @abstractmethod
-    async def prepare(
-        self, document: BaseDocument, raw: bytes
-    ) -> PreparedDocumentContent: ...
-
-
-class PreparedTextStrategy(IPreparedStrategy):
-    def __init__(self, to_docx_converter: IToDocxConverter) -> None:
-        self._to_docx_converter = to_docx_converter
-
-    @override
-    def supports(self, content: bytes) -> bool:
-        return _guess_extension(content) in _TEXT_SOURCE_EXTENSIONS
-
-    @override
-    def resolve_file_name(self, document: BaseDocument, content: bytes) -> str:
-        raw_file_name = document.file_name
-        suffix = Path(raw_file_name).suffix.lower()
-        if suffix in _PREPARED_EXTENSIONS:
-            return raw_file_name
-        return str(Path(raw_file_name).with_suffix(".docx"))
-
-    @override
-    async def prepare(
-        self, document: BaseDocument, raw: bytes
-    ) -> PreparedDocumentContent:
-        if _guess_extension(raw) in _PREPARED_EXTENSIONS:
-            content = raw
-        else:
-            content = await self._to_docx_converter.convert(document.file_name, raw)
-        return PreparedDocumentContent(
-            content=content,
-            file_name=self.resolve_file_name(document, content),
-        )
-
-
-class PreparedSpreadsheetStrategy(IPreparedStrategy):
-    def __init__(self, to_xlsx_converter: IToXlsxConverter) -> None:
-        self._to_xlsx_converter = to_xlsx_converter
-
-    @override
-    def supports(self, content: bytes) -> bool:
-        return _guess_extension(content) in _SPREADSHEET_SOURCE_EXTENSIONS
-
-    @override
-    def resolve_file_name(self, document: BaseDocument, content: bytes) -> str:
-        raw_file_name = document.file_name
-        suffix = Path(raw_file_name).suffix.lower()
-        if suffix in _PREPARED_EXTENSIONS:
-            return raw_file_name
-        return str(Path(raw_file_name).with_suffix(".xlsx"))
-
-    @override
-    async def prepare(
-        self, document: BaseDocument, raw: bytes
-    ) -> PreparedDocumentContent:
-        if _guess_extension(raw) in _PREPARED_EXTENSIONS:
-            content = raw
-        else:
-            content = await self._to_xlsx_converter.convert(document.file_name, raw)
-        return PreparedDocumentContent(
-            content=content,
-            file_name=self.resolve_file_name(document, content),
-        )
-
-
-class PreparedStrategyMapper(IPreparedStrategy):
-    def __init__(self, strategies: list[IPreparedStrategy]) -> None:
-        self._strategies = strategies
-
-    def pick(self, content: bytes) -> IPreparedStrategy:
-        for strategy in self._strategies:
-            if strategy.supports(content):
-                return strategy
-        msg = "No prepared strategy for given content"
-        raise ValueError(msg)
-
-    @override
-    def supports(self, content: bytes) -> bool:
-        return any(strategy.supports(content) for strategy in self._strategies)
-
-    @override
-    def resolve_file_name(self, document: BaseDocument, content: bytes) -> str:
-        return self.pick(content).resolve_file_name(document, content)
-
-    @override
-    async def prepare(
-        self, document: BaseDocument, raw: bytes
-    ) -> PreparedDocumentContent:
-        return await self.pick(raw).prepare(document, raw)
-
-
 class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
     def __init__(
         self,
@@ -307,15 +200,17 @@ class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
             cached = await self._prepared_storage.get(document)
         except DocumentNotFoundError:
             raw = await self._raw_storage.get(document)
-            prepared = await self._strategy.prepare(document, raw.content)
+            extension = _guess_extension(raw.content)
+            prepared = await self._strategy.prepare(document, raw.content, extension)
             await self._prepared_storage.set(
                 document=document,
                 content=BinaryDocumentContent(content=prepared.content),
             )
             return prepared
+        extension = _guess_extension(cached.content)
         return PreparedDocumentContent(
             content=cached.content,
-            file_name=self._strategy.resolve_file_name(document, cached.content),
+            file_name=self._strategy.resolve_file_name(document, extension),
         )
 
     @override

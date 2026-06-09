@@ -4,15 +4,15 @@ from uuid import uuid4
 import pytest
 
 from app.application import DocumentNotFoundError
-from app.domain.entities.single_supplier import SingleSupplierDocument
-from app.domain.entities.unknown import UnknownDocument
-from app.domain.ports.documents import BinaryDocumentContent
-from app.infrastructure.storages.minio_storage import (
-    CachedPreparedDocumentStorage,
+from app.domain.documents.prepared_strategy import (
     PreparedSpreadsheetStrategy,
     PreparedStrategyMapper,
     PreparedTextStrategy,
 )
+from app.domain.entities.single_supplier import SingleSupplierDocument
+from app.domain.entities.unknown import UnknownDocument
+from app.domain.ports.documents import BinaryDocumentContent
+from app.infrastructure.storages.minio_storage import CachedPreparedDocumentStorage
 
 
 def _patch_guess(monkeypatch: pytest.MonkeyPatch, extension: str | None) -> None:
