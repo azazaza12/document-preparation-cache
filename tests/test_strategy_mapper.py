@@ -100,39 +100,51 @@ def test_mapper_resolve_file_name_for_spreadsheet_content(
     assert mapper.resolve_file_name(document, b"fake-xlsx") == "report.xlsx"
 
 
-def test_mapper_is_already_prepared_by_content(
-    mapper: PreparedStrategyMapper, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr("filetype.guess", _fake_guess("docx"))
-    assert mapper.is_already_prepared(b"already-docx") is True
-
-    monkeypatch.setattr("filetype.guess", _fake_guess("doc"))
-    assert mapper.is_already_prepared(b"legacy-doc") is False
-
-
 @pytest.mark.asyncio
-async def test_mapper_delegates_convert_to_text_strategy(
+async def test_mapper_prepare_returns_raw_when_already_prepared(
     mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mapper, text_converter, _ = mapper_with_converters
-    monkeypatch.setattr("filetype.guess", _fake_guess("doc"))
-    document = UnknownDocument(id=uuid4(), file_name="contract.doc")
+    monkeypatch.setattr("filetype.guess", _fake_guess("docx"))
+    document = UnknownDocument(id=uuid4(), file_name="contract.docx")
 
-    assert await mapper.convert(document, b"raw-doc") == b"docx"
+    prepared = await mapper.prepare(document, b"already-docx")
 
-    text_converter.convert.assert_awaited_once_with("contract.doc", b"raw-doc")
+    assert prepared.content == b"already-docx"
+    assert prepared.file_name == "contract.docx"
+    text_converter.convert.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_mapper_delegates_convert_to_spreadsheet_strategy(
+async def test_mapper_prepare_converts_via_text_strategy(
     mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    mapper, _, spreadsheet_converter = mapper_with_converters
+    mapper, text_converter, spreadsheet_converter = mapper_with_converters
+    monkeypatch.setattr("filetype.guess", _fake_guess("odt"))
+    document = UnknownDocument(id=uuid4(), file_name="contract.odt")
+
+    prepared = await mapper.prepare(document, b"raw-odt")
+
+    assert prepared.content == b"docx"
+    assert prepared.file_name == "contract.docx"
+    text_converter.convert.assert_awaited_once_with("contract.odt", b"raw-odt")
+    spreadsheet_converter.convert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_mapper_prepare_converts_via_spreadsheet_strategy(
+    mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mapper, text_converter, spreadsheet_converter = mapper_with_converters
     monkeypatch.setattr("filetype.guess", _fake_guess("xls"))
     document = UnknownDocument(id=uuid4(), file_name="report.xls")
 
-    assert await mapper.convert(document, b"raw-xls") == b"xlsx"
+    prepared = await mapper.prepare(document, b"raw-xls")
 
+    assert prepared.content == b"xlsx"
+    assert prepared.file_name == "report.xlsx"
     spreadsheet_converter.convert.assert_awaited_once_with("report.xls", b"raw-xls")
+    text_converter.convert.assert_not_awaited()

@@ -189,10 +189,9 @@ class IPreparedStrategy(ABC):
     def resolve_file_name(self, document: BaseDocument, content: bytes) -> str: ...
 
     @abstractmethod
-    def is_already_prepared(self, content: bytes) -> bool: ...
-
-    @abstractmethod
-    async def convert(self, document: BaseDocument, data: bytes) -> bytes: ...
+    async def prepare(
+        self, document: BaseDocument, raw: bytes
+    ) -> PreparedDocumentContent: ...
 
 
 class PreparedTextStrategy(IPreparedStrategy):
@@ -212,12 +211,17 @@ class PreparedTextStrategy(IPreparedStrategy):
         return str(Path(raw_file_name).with_suffix(".docx"))
 
     @override
-    def is_already_prepared(self, content: bytes) -> bool:
-        return _guess_extension(content) in _TEXT_READY_EXTENSIONS
-
-    @override
-    async def convert(self, document: BaseDocument, data: bytes) -> bytes:
-        return await self._to_docx_converter.convert(document.file_name, data)
+    async def prepare(
+        self, document: BaseDocument, raw: bytes
+    ) -> PreparedDocumentContent:
+        if _guess_extension(raw) in _TEXT_READY_EXTENSIONS:
+            content = raw
+        else:
+            content = await self._to_docx_converter.convert(document.file_name, raw)
+        return PreparedDocumentContent(
+            content=content,
+            file_name=self.resolve_file_name(document, content),
+        )
 
 
 class PreparedSpreadsheetStrategy(IPreparedStrategy):
@@ -237,12 +241,17 @@ class PreparedSpreadsheetStrategy(IPreparedStrategy):
         return str(Path(raw_file_name).with_suffix(".xlsx"))
 
     @override
-    def is_already_prepared(self, content: bytes) -> bool:
-        return _guess_extension(content) == ".xlsx"
-
-    @override
-    async def convert(self, document: BaseDocument, data: bytes) -> bytes:
-        return await self._to_xlsx_converter.convert(document.file_name, data)
+    async def prepare(
+        self, document: BaseDocument, raw: bytes
+    ) -> PreparedDocumentContent:
+        if _guess_extension(raw) == ".xlsx":
+            content = raw
+        else:
+            content = await self._to_xlsx_converter.convert(document.file_name, raw)
+        return PreparedDocumentContent(
+            content=content,
+            file_name=self.resolve_file_name(document, content),
+        )
 
 
 class PreparedStrategyMapper(IPreparedStrategy):
@@ -265,12 +274,10 @@ class PreparedStrategyMapper(IPreparedStrategy):
         return self.pick(content).resolve_file_name(document, content)
 
     @override
-    def is_already_prepared(self, content: bytes) -> bool:
-        return self.pick(content).is_already_prepared(content)
-
-    @override
-    async def convert(self, document: BaseDocument, data: bytes) -> bytes:
-        return await self.pick(data).convert(document, data)
+    async def prepare(
+        self, document: BaseDocument, raw: bytes
+    ) -> PreparedDocumentContent:
+        return await self.pick(raw).prepare(document, raw)
 
 
 class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
@@ -297,20 +304,17 @@ class CachedPreparedDocumentStorage(IDocumentStorage[PreparedDocumentContent]):
     async def get(self, document: BaseDocument) -> PreparedDocumentContent:
         try:
             cached = await self._prepared_storage.get(document)
-            content_bytes = cached.content
         except DocumentNotFoundError:
             raw = await self._raw_storage.get(document)
-            if self._strategy.is_already_prepared(raw.content):
-                content_bytes = raw.content
-            else:
-                content_bytes = await self._strategy.convert(document, raw.content)
+            prepared = await self._strategy.prepare(document, raw.content)
             await self._prepared_storage.set(
                 document=document,
-                content=BinaryDocumentContent(content=content_bytes),
+                content=BinaryDocumentContent(content=prepared.content),
             )
+            return prepared
         return PreparedDocumentContent(
-            content=content_bytes,
-            file_name=self._strategy.resolve_file_name(document, content_bytes),
+            content=cached.content,
+            file_name=self._strategy.resolve_file_name(document, cached.content),
         )
 
     @override
