@@ -24,9 +24,9 @@ from app.domain.ports.xlsx_converter import IToXlsxConverter
 from app.infrastructure.taskiq.tasks import docling_to_markdown
 
 
-_SPREADSHEET_EXTENSIONS = frozenset({".xls", ".xlsx", ".xlsm", ".ods"})
-_TEXT_READY_EXTENSIONS = frozenset({".pdf", ".docx"})
-_TEXT_SOURCE_EXTENSIONS = frozenset({".pdf", ".docx", ".docm", ".doc", ".odt", ".rtf"})
+_TEXT_SOURCE_EXTENSIONS = frozenset({".pdf", ".doc", ".docx", ".odt", ".rtf"})
+_SPREADSHEET_SOURCE_EXTENSIONS = frozenset({".xls", ".xlsx", ".ods"})
+_PREPARED_EXTENSIONS = frozenset({".pdf", ".docx", ".xlsx"})
 
 
 def _guess_extension(data: bytes) -> str | None:
@@ -207,7 +207,7 @@ class PreparedTextStrategy(IPreparedStrategy):
     def resolve_file_name(self, document: BaseDocument, content: bytes) -> str:
         raw_file_name = document.file_name
         suffix = Path(raw_file_name).suffix.lower()
-        if suffix in _TEXT_READY_EXTENSIONS:
+        if suffix in _PREPARED_EXTENSIONS:
             return raw_file_name
         return str(Path(raw_file_name).with_suffix(".docx"))
 
@@ -215,7 +215,7 @@ class PreparedTextStrategy(IPreparedStrategy):
     async def prepare(
         self, document: BaseDocument, raw: bytes
     ) -> PreparedDocumentContent:
-        if _guess_extension(raw) in _TEXT_READY_EXTENSIONS:
+        if _guess_extension(raw) in _PREPARED_EXTENSIONS:
             content = raw
         else:
             content = await self._to_docx_converter.convert(document.file_name, raw)
@@ -231,13 +231,13 @@ class PreparedSpreadsheetStrategy(IPreparedStrategy):
 
     @override
     def supports(self, content: bytes) -> bool:
-        return _guess_extension(content) in _SPREADSHEET_EXTENSIONS
+        return _guess_extension(content) in _SPREADSHEET_SOURCE_EXTENSIONS
 
     @override
     def resolve_file_name(self, document: BaseDocument, content: bytes) -> str:
         raw_file_name = document.file_name
         suffix = Path(raw_file_name).suffix.lower()
-        if suffix == ".xlsx":
+        if suffix in _PREPARED_EXTENSIONS:
             return raw_file_name
         return str(Path(raw_file_name).with_suffix(".xlsx"))
 
@@ -245,7 +245,7 @@ class PreparedSpreadsheetStrategy(IPreparedStrategy):
     async def prepare(
         self, document: BaseDocument, raw: bytes
     ) -> PreparedDocumentContent:
-        if _guess_extension(raw) == ".xlsx":
+        if _guess_extension(raw) in _PREPARED_EXTENSIONS:
             content = raw
         else:
             content = await self._to_xlsx_converter.convert(document.file_name, raw)
