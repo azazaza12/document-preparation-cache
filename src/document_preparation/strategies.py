@@ -15,13 +15,16 @@ _SPREADSHEET_SOURCE_EXTENSIONS = frozenset({".xls", ".xlsx", ".ods"})
 _PREPARED_EXTENSIONS = frozenset({".pdf", ".docx", ".xlsx"})
 
 
-class PreparedTextStrategy(IPreparedStrategy):
+class BasePreparedStrategy(IPreparedStrategy):
+    _source_extensions: frozenset[str]
+    _target_suffix: str
+
     def __init__(self, converter: IFormatConverter) -> None:
         self._converter = converter
 
     @override
     def supports(self, extension: str | None) -> bool:
-        return extension in _TEXT_SOURCE_EXTENSIONS
+        return extension in self._source_extensions
 
     @override
     def resolve_file_name(self, document: BaseDocument, extension: str | None) -> str:
@@ -29,7 +32,7 @@ class PreparedTextStrategy(IPreparedStrategy):
         suffix = Path(raw_file_name).suffix.lower()
         if suffix in _PREPARED_EXTENSIONS:
             return raw_file_name
-        return str(Path(raw_file_name).with_suffix(".docx"))
+        return str(Path(raw_file_name).with_suffix(self._target_suffix))
 
     @override
     async def prepare(
@@ -45,34 +48,14 @@ class PreparedTextStrategy(IPreparedStrategy):
         )
 
 
-class PreparedSpreadsheetStrategy(IPreparedStrategy):
-    def __init__(self, converter: IFormatConverter) -> None:
-        self._converter = converter
+class PreparedTextStrategy(BasePreparedStrategy):
+    _source_extensions = _TEXT_SOURCE_EXTENSIONS
+    _target_suffix = ".docx"
 
-    @override
-    def supports(self, extension: str | None) -> bool:
-        return extension in _SPREADSHEET_SOURCE_EXTENSIONS
 
-    @override
-    def resolve_file_name(self, document: BaseDocument, extension: str | None) -> str:
-        raw_file_name = document.file_name
-        suffix = Path(raw_file_name).suffix.lower()
-        if suffix in _PREPARED_EXTENSIONS:
-            return raw_file_name
-        return str(Path(raw_file_name).with_suffix(".xlsx"))
-
-    @override
-    async def prepare(
-        self, document: BaseDocument, raw: bytes, extension: str | None
-    ) -> PreparedDocumentContent:
-        if extension in _PREPARED_EXTENSIONS:
-            content = raw
-        else:
-            content = await self._converter.convert(document.file_name, raw)
-        return PreparedDocumentContent(
-            content=content,
-            file_name=self.resolve_file_name(document, extension),
-        )
+class PreparedSpreadsheetStrategy(BasePreparedStrategy):
+    _source_extensions = _SPREADSHEET_SOURCE_EXTENSIONS
+    _target_suffix = ".xlsx"
 
 
 class PreparedStrategyMapper(IPreparedStrategy):
