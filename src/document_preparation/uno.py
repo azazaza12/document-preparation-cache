@@ -1,9 +1,8 @@
 import asyncio
 
-from app.config import UnoConverterSettings
-from app.domain.ports.format_converter import IFormatConverter
-from app.infrastructure.extraction.conversion_target import ConversionTarget
-from app.infrastructure.extraction.uno_convert import unoconvert
+from document_preparation.conversion import ConversionTarget
+from document_preparation.converter_port import IFormatConverter
+from document_preparation.uno_subprocess import UnoConverterSettings, unoconvert
 
 
 class UnoConverter(IFormatConverter):

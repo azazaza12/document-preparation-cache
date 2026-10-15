@@ -2,17 +2,16 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from tests.conftest import FakeDocument
 
-from app.application import DocumentNotFoundError
-from app.domain.documents.prepared_strategy import (
+from document_preparation.cached import CachedPreparedDocumentStorage
+from document_preparation.content import BinaryDocumentContent
+from document_preparation.exceptions import DocumentNotFoundError
+from document_preparation.strategies import (
     PreparedSpreadsheetStrategy,
     PreparedStrategyMapper,
     PreparedTextStrategy,
 )
-from app.domain.entities.single_supplier import SingleSupplierDocument
-from app.domain.entities.unknown import UnknownDocument
-from app.domain.ports.documents import BinaryDocumentContent
-from app.infrastructure.storages.minio_storage import CachedPreparedDocumentStorage
 
 
 def _patch_guess(monkeypatch: pytest.MonkeyPatch, extension: str | None) -> None:
@@ -42,7 +41,7 @@ async def test_prepared_text_cache_hit_returns_resolved_file_name() -> None:
     strategy = PreparedTextStrategy(converter)
 
     storage = CachedPreparedDocumentStorage(prepared_storage, raw_storage, strategy)
-    document = SingleSupplierDocument(id=uuid4(), file_name="contract.doc")
+    document = FakeDocument(id=uuid4(), file_name="contract.doc")
 
     loaded = await storage.get(document)
 
@@ -71,7 +70,7 @@ async def test_prepared_text_cache_miss_converts_doc_and_caches(
     strategy = PreparedTextStrategy(converter)
 
     storage = CachedPreparedDocumentStorage(prepared_storage, raw_storage, strategy)
-    document = SingleSupplierDocument(id=uuid4(), file_name="contract.doc")
+    document = FakeDocument(id=uuid4(), file_name="contract.doc")
 
     loaded = await storage.get(document)
 
@@ -104,7 +103,7 @@ async def test_prepared_text_cache_miss_docx_skips_converter(
     strategy = PreparedTextStrategy(converter)
 
     storage = CachedPreparedDocumentStorage(prepared_storage, raw_storage, strategy)
-    document = SingleSupplierDocument(id=uuid4(), file_name="contract.docx")
+    document = FakeDocument(id=uuid4(), file_name="contract.docx")
 
     loaded = await storage.get(document)
 
@@ -133,7 +132,7 @@ async def test_prepared_spreadsheet_cache_miss_converts_xls_and_caches(
     strategy = PreparedSpreadsheetStrategy(converter)
 
     storage = CachedPreparedDocumentStorage(prepared_storage, raw_storage, strategy)
-    document = SingleSupplierDocument(id=uuid4(), file_name="imcp.xls")
+    document = FakeDocument(id=uuid4(), file_name="imcp.xls")
 
     loaded = await storage.get(document)
 
@@ -165,7 +164,7 @@ async def test_prepared_spreadsheet_cache_miss_xlsx_skips_converter(
     strategy = PreparedSpreadsheetStrategy(converter)
 
     storage = CachedPreparedDocumentStorage(prepared_storage, raw_storage, strategy)
-    document = SingleSupplierDocument(id=uuid4(), file_name="imcp.xlsx")
+    document = FakeDocument(id=uuid4(), file_name="imcp.xlsx")
 
     loaded = await storage.get(document)
 
@@ -205,7 +204,7 @@ async def test_mapper_cache_miss_routes_xlsx_content_to_spreadsheet(
 
     mapper, text_converter, spreadsheet_converter = _mapper()
     storage = CachedPreparedDocumentStorage(prepared_storage, raw_storage, mapper)
-    document = UnknownDocument(id=uuid4(), file_name="report.xls")
+    document = FakeDocument(id=uuid4(), file_name="report.xls")
 
     loaded = await storage.get(document)
 
@@ -229,7 +228,7 @@ async def test_mapper_cache_miss_routes_odt_content_to_text(
 
     mapper, text_converter, spreadsheet_converter = _mapper()
     storage = CachedPreparedDocumentStorage(prepared_storage, raw_storage, mapper)
-    document = UnknownDocument(id=uuid4(), file_name="contract.odt")
+    document = FakeDocument(id=uuid4(), file_name="contract.odt")
 
     loaded = await storage.get(document)
 
@@ -255,7 +254,7 @@ async def test_mapper_cache_hit_resolves_file_name_from_cached_content(
 
     mapper, text_converter, spreadsheet_converter = _mapper()
     storage = CachedPreparedDocumentStorage(prepared_storage, raw_storage, mapper)
-    document = UnknownDocument(id=uuid4(), file_name="report.bin")
+    document = FakeDocument(id=uuid4(), file_name="report.bin")
 
     loaded = await storage.get(document)
 
@@ -279,7 +278,7 @@ async def test_cached_prepared_document_storage_deletes_prepared() -> None:
         raw_storage,
         PreparedTextStrategy(converter),
     )
-    document = SingleSupplierDocument(id=uuid4(), file_name="contract.doc")
+    document = FakeDocument(id=uuid4(), file_name="contract.doc")
 
     await storage.delete(document)
 

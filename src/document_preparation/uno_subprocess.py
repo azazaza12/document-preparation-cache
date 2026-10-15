@@ -1,9 +1,17 @@
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
-from app.config import UnoConverterSettings
-from app.infrastructure.extraction.conversion_target import ConversionTarget
-from app.infrastructure.extraction.exceptions import DocumentConversionError
+from document_preparation.conversion import ConversionTarget
+from document_preparation.exceptions import DocumentConversionError
+
+
+@dataclass(frozen=True, kw_only=True)
+class UnoConverterSettings:
+    UNO_BINARY: str = "unoconvert"
+    UNO_HOST: str = "unoserver"
+    UNO_PORT: int = 2003
+    CONVERT_TIMEOUT_SEC: float = 120.0
 
 
 def unoconvert(

@@ -1,69 +1,67 @@
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from tests.conftest import FakeDocument
 
-from app.application import DocumentNotFoundError
-from app.domain.entities.single_supplier import SingleSupplierDocument
-from app.domain.ports.documents import DoclingDocumentContent, MarkdownDocumentContent
-from app.infrastructure.storages.minio_storage import CachedDoclingMarkdownStorage
+from document_preparation.cached import CachedMarkdownStorage
+from document_preparation.content import (
+    MarkdownDocumentContent,
+    RenderableDocumentContent,
+)
+from document_preparation.exceptions import DocumentNotFoundError
 
 
 @pytest.mark.asyncio
-async def test_cached_docling_markdown_storage_returns_cached_markdown() -> None:
+async def test_cached_markdown_storage_returns_cached_markdown() -> None:
     markdown_storage = MagicMock()
     markdown_storage.get = AsyncMock(
         return_value=MarkdownDocumentContent(content="# cached")
     )
     markdown_storage.set = AsyncMock()
 
-    docling_storage = MagicMock()
-    docling_storage.get = AsyncMock()
+    source_storage = MagicMock()
+    source_storage.get = AsyncMock()
 
-    storage = CachedDoclingMarkdownStorage(markdown_storage, docling_storage)
-    document = SingleSupplierDocument(id=uuid4(), file_name="doc.pdf")
+    renderer = MagicMock()
+    renderer.render = AsyncMock()
+
+    storage = CachedMarkdownStorage(markdown_storage, source_storage, renderer)
+    document = FakeDocument(id=uuid4(), file_name="doc.pdf")
 
     loaded = await storage.get(document)
 
     assert loaded.content == "# cached"
     markdown_storage.get.assert_awaited_once_with(document)
     markdown_storage.set.assert_not_awaited()
-    docling_storage.get.assert_not_awaited()
+    source_storage.get.assert_not_awaited()
+    renderer.render.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_cached_docling_markdown_storage_builds_and_caches_on_miss() -> None:
+async def test_cached_markdown_storage_builds_and_caches_on_miss() -> None:
     markdown_storage = MagicMock()
     markdown_storage.get = AsyncMock(side_effect=DocumentNotFoundError)
     markdown_storage.set = AsyncMock()
 
-    docling_document = MagicMock()
-    docling_document.model_dump.return_value = {"doc": "ling"}
-
-    docling_storage = MagicMock()
-    docling_storage.get = AsyncMock(
-        return_value=DoclingDocumentContent(content=docling_document)
+    source_document = object()
+    source_storage = MagicMock()
+    source_storage.get = AsyncMock(
+        return_value=RenderableDocumentContent(content=source_document)
     )
 
-    task_result = SimpleNamespace(return_value="# generated")
-    task = MagicMock()
-    task.wait_result = AsyncMock(return_value=task_result)
+    renderer = MagicMock()
+    renderer.render = AsyncMock(return_value="# generated")
 
-    storage = CachedDoclingMarkdownStorage(markdown_storage, docling_storage)
-    document = SingleSupplierDocument(id=uuid4(), file_name="doc.pdf")
+    storage = CachedMarkdownStorage(markdown_storage, source_storage, renderer)
+    document = FakeDocument(id=uuid4(), file_name="doc.pdf")
 
-    with patch(
-        "app.infrastructure.storages.minio_storage.docling_to_markdown.kiq",
-        new=AsyncMock(return_value=task),
-    ) as kiq:
-        loaded = await storage.get(document)
+    loaded = await storage.get(document)
 
     assert loaded.content == "# generated"
     markdown_storage.get.assert_awaited_once_with(document)
-    docling_storage.get.assert_awaited_once_with(document)
-    docling_document.model_dump.assert_called_once_with()
-    kiq.assert_awaited_once_with(document={"doc": "ling"})
+    source_storage.get.assert_awaited_once_with(document)
+    renderer.render.assert_awaited_once_with(source_document)
     markdown_storage.set.assert_awaited_once()
 
     cached_document, cached_content = markdown_storage.set.await_args.args
@@ -72,13 +70,14 @@ async def test_cached_docling_markdown_storage_builds_and_caches_on_miss() -> No
 
 
 @pytest.mark.asyncio
-async def test_cached_docling_markdown_storage_deletes_cached_markdown() -> None:
+async def test_cached_markdown_storage_deletes_cached_markdown() -> None:
     markdown_storage = MagicMock()
     markdown_storage.delete = AsyncMock()
-    docling_storage = MagicMock()
+    source_storage = MagicMock()
+    renderer = MagicMock()
 
-    storage = CachedDoclingMarkdownStorage(markdown_storage, docling_storage)
-    document = SingleSupplierDocument(id=uuid4(), file_name="doc.pdf")
+    storage = CachedMarkdownStorage(markdown_storage, source_storage, renderer)
+    document = FakeDocument(id=uuid4(), file_name="doc.pdf")
 
     await storage.delete(document)
 

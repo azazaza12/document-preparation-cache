@@ -3,18 +3,18 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from app.domain.entities import BaseDocument
+    from document_preparation.documents import Document
 
 
 class IDocumentStorage[C](ABC):
     @abstractmethod
-    async def set(self, document: BaseDocument, content: C) -> None:
+    async def set(self, document: Document, content: C) -> None:
         pass
 
     @abstractmethod
-    async def get(self, document: BaseDocument) -> C:
+    async def get(self, document: Document) -> C:
         pass
 
     @abstractmethod
-    async def delete(self, document: BaseDocument) -> None:
+    async def delete(self, document: Document) -> None:
         pass

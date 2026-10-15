@@ -2,13 +2,13 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from tests.conftest import FakeDocument
 
-from app.domain.documents.prepared_strategy import (
+from document_preparation.strategies import (
     PreparedSpreadsheetStrategy,
     PreparedStrategyMapper,
     PreparedTextStrategy,
 )
-from app.domain.entities.unknown import UnknownDocument
 
 
 @pytest.fixture
@@ -61,7 +61,7 @@ def test_mapper_does_not_support_unrecognized_extension(
 def test_mapper_resolve_file_name_for_text_extension(
     mapper: PreparedStrategyMapper,
 ) -> None:
-    document = UnknownDocument(id=uuid4(), file_name="contract.doc")
+    document = FakeDocument(id=uuid4(), file_name="contract.doc")
 
     assert mapper.resolve_file_name(document, ".docx") == "contract.docx"
 
@@ -69,7 +69,7 @@ def test_mapper_resolve_file_name_for_text_extension(
 def test_mapper_resolve_file_name_for_spreadsheet_extension(
     mapper: PreparedStrategyMapper,
 ) -> None:
-    document = UnknownDocument(id=uuid4(), file_name="report.xls")
+    document = FakeDocument(id=uuid4(), file_name="report.xls")
 
     assert mapper.resolve_file_name(document, ".xlsx") == "report.xlsx"
 
@@ -79,7 +79,7 @@ async def test_mapper_prepare_returns_raw_when_already_prepared(
     mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock],
 ) -> None:
     mapper, text_converter, _ = mapper_with_converters
-    document = UnknownDocument(id=uuid4(), file_name="contract.docx")
+    document = FakeDocument(id=uuid4(), file_name="contract.docx")
 
     prepared = await mapper.prepare(document, b"already-docx", ".docx")
 
@@ -93,7 +93,7 @@ async def test_mapper_prepare_converts_via_text_strategy(
     mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock],
 ) -> None:
     mapper, text_converter, spreadsheet_converter = mapper_with_converters
-    document = UnknownDocument(id=uuid4(), file_name="contract.odt")
+    document = FakeDocument(id=uuid4(), file_name="contract.odt")
 
     prepared = await mapper.prepare(document, b"raw-odt", ".odt")
 
@@ -108,7 +108,7 @@ async def test_mapper_prepare_converts_via_spreadsheet_strategy(
     mapper_with_converters: tuple[PreparedStrategyMapper, AsyncMock, AsyncMock],
 ) -> None:
     mapper, text_converter, spreadsheet_converter = mapper_with_converters
-    document = UnknownDocument(id=uuid4(), file_name="report.xls")
+    document = FakeDocument(id=uuid4(), file_name="report.xls")
 
     prepared = await mapper.prepare(document, b"raw-xls", ".xls")
 

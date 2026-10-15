@@ -1,13 +1,13 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, override
 
-from app.domain.ports.documents import PreparedDocumentContent
-from app.domain.ports.format_converter import IFormatConverter
-from app.domain.ports.prepared_strategy import IPreparedStrategy
+from document_preparation.content import PreparedDocumentContent
+from document_preparation.converter_port import IFormatConverter
+from document_preparation.strategy_port import IPreparedStrategy
 
 
 if TYPE_CHECKING:
-    from app.domain.entities import BaseDocument
+    from document_preparation.documents import Document
 
 
 _TEXT_SOURCE_EXTENSIONS = frozenset({".pdf", ".doc", ".docx", ".odt", ".rtf"})
@@ -27,7 +27,7 @@ class BasePreparedStrategy(IPreparedStrategy):
         return extension in self._source_extensions
 
     @override
-    def resolve_file_name(self, document: BaseDocument, extension: str | None) -> str:
+    def resolve_file_name(self, document: Document, extension: str | None) -> str:
         raw_file_name = document.file_name
         suffix = Path(raw_file_name).suffix.lower()
         if suffix in _PREPARED_EXTENSIONS:
@@ -36,7 +36,7 @@ class BasePreparedStrategy(IPreparedStrategy):
 
     @override
     async def prepare(
-        self, document: BaseDocument, raw: bytes, extension: str | None
+        self, document: Document, raw: bytes, extension: str | None
     ) -> PreparedDocumentContent:
         if extension in _PREPARED_EXTENSIONS:
             content = raw
@@ -74,11 +74,11 @@ class PreparedStrategyMapper(IPreparedStrategy):
         return any(strategy.supports(extension) for strategy in self._strategies)
 
     @override
-    def resolve_file_name(self, document: BaseDocument, extension: str | None) -> str:
+    def resolve_file_name(self, document: Document, extension: str | None) -> str:
         return self.pick(extension).resolve_file_name(document, extension)
 
     @override
     async def prepare(
-        self, document: BaseDocument, raw: bytes, extension: str | None
+        self, document: Document, raw: bytes, extension: str | None
     ) -> PreparedDocumentContent:
         return await self.pick(extension).prepare(document, raw, extension)

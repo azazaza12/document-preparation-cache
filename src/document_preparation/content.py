@@ -1,8 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass
 
-from docling_core.types.doc.document import DoclingDocument
-
 
 @dataclass(kw_only=True)
 class BaseDocumentContent[T](ABC):
@@ -14,11 +12,11 @@ class BinaryDocumentContent(BaseDocumentContent[bytes]):
     pass
 
 
-class DoclingDocumentContent(BaseDocumentContent[DoclingDocument]):
+class MarkdownDocumentContent(BaseDocumentContent[str]):
     pass
 
 
-class MarkdownDocumentContent(BaseDocumentContent[str]):
+class RenderableDocumentContent[T](BaseDocumentContent[T]):
     pass
 
 

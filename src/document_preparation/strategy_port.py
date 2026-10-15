@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from app.domain.ports.documents import PreparedDocumentContent
+from document_preparation.content import PreparedDocumentContent
 
 
 if TYPE_CHECKING:
-    from app.domain.entities import BaseDocument
+    from document_preparation.documents import Document
 
 
 class IPreparedStrategy(ABC):
@@ -13,11 +13,9 @@ class IPreparedStrategy(ABC):
     def supports(self, extension: str | None) -> bool: ...
 
     @abstractmethod
-    def resolve_file_name(
-        self, document: BaseDocument, extension: str | None
-    ) -> str: ...
+    def resolve_file_name(self, document: Document, extension: str | None) -> str: ...
 
     @abstractmethod
     async def prepare(
-        self, document: BaseDocument, raw: bytes, extension: str | None
+        self, document: Document, raw: bytes, extension: str | None
     ) -> PreparedDocumentContent: ...
