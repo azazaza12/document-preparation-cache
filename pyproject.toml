@@ -1,0 +1,64 @@
+[project]
+name = "document-preparation"
+version = "0.1.0"
+description = "Caching storage decorators and format-preparation strategies for document pipelines"
+readme = "README.md"
+requires-python = ">=3.14"
+authors = [{ name = "Azaliya Khakimullina" }]
+dependencies = [
+    "filetype>=1.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/document_preparation"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "B",
+    "C4",
+    "SIM",
+    "RUF",
+    "S",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = "filetype.*"
+ignore_missing_imports = true
