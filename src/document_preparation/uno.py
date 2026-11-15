@@ -1,7 +1,7 @@
 import asyncio
 
 from document_preparation.conversion import ConversionTarget
-from document_preparation.converter_port import IFormatConverter
+from document_preparation.ports import IFormatConverter
 from document_preparation.uno_subprocess import UnoConverterSettings, unoconvert
 
 

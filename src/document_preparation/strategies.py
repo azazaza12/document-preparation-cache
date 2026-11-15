@@ -2,8 +2,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, override
 
 from document_preparation.content import PreparedDocumentContent
-from document_preparation.converter_port import IFormatConverter
-from document_preparation.strategy_port import IPreparedStrategy
+from document_preparation.ports import IFormatConverter, IPreparedStrategy
 
 
 if TYPE_CHECKING:

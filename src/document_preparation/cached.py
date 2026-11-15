@@ -9,9 +9,11 @@ from document_preparation.content import (
     RenderableDocumentContent,
 )
 from document_preparation.exceptions import DocumentNotFoundError
-from document_preparation.renderer_port import IMarkdownRenderer
-from document_preparation.storage_port import IDocumentStorage
-from document_preparation.strategy_port import IPreparedStrategy
+from document_preparation.ports import (
+    IDocumentStorage,
+    IMarkdownRenderer,
+    IPreparedStrategy,
+)
 
 
 if TYPE_CHECKING:
